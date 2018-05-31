@@ -1,0 +1,43 @@
+<launch>
+     <node name="topic_node" pkg="topic_node" type="topic_node" />
+     <node name="topic_nodeposition" pkg="position" type="topic_nodeposition" />
+    <node name="msf_position_pose_sensor" pkg="msf_updates" type="position_pose_sensor" clear_params="true" output="screen">
+        <!--remap from="msf_core/hl_state_input" to="/auk/fcu/ekf_state_out" /--> <!--HL STATE-->
+        <!--remap from="msf_core/correction" to="/auk/fcu/ekf_state_in"/-->
+  			
+        <remap from="msf_core/imu_state_input" to="/imu0" /> <!--SLAM SENSOR IMU-->
+
+
+        <remap from="msf_updates/position_input" to="/vins_position" /> <!--LEICA-->
+        <!--remap from="msf_updates/navsatfix_input" to="/auk/fcu/gps" /-->  <!--GPS-->
+	    	
+        <!--remap from="msf_updates/transform_input" to="vicon/auk/auk" /--> <!--VICON-->
+                    
+        <!--remap from="msf_updates/pose_with_covariance_input" to="/bluebird/down/vslam/pose" /-->  <!--BLUEBIRD-->
+        <!--remap from="msf_updates/pose_with_covariance_input" to="/auk/down/vslam/pose" /--> <!--AUK-->
+        <!--remap from="msf_updates/pose_with_covariance_input" to="/vins_pose" /-->
+        <remap from="msf_updates/pose_with_covariance_input" to="/vins_pose" />
+        <!--DISTORTED-->
+        <remap from="msf_updates/navsatfix_input" to="/msf_distort/navsatfix_output" /> 
+        <remap from="msf_updates/pose_with_covariance_input" to="/msf_distort/pose_with_covariance_output" />
+
+        <rosparam file="$(find msf_updates)/position_pose_sensor_fix.yaml"/>
+    </node>
+
+    <arg name="config_path" default = "$(find feature_tracker)/../config/loitor/loitor_config.yaml" />
+	  <arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
+    
+    <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
+        <param name="config_file" type="string" value="$(arg config_path)" />
+        <param name="vins_folder" type="string" value="$(arg vins_path)" />
+    </node>
+
+    <node name="vins_estimator" pkg="vins_estimator" type="vins_estimator" output="screen">
+       <param name="config_file" type="string" value="$(arg config_path)" />
+       <param name="vins_folder" type="string" value="$(arg vins_path)" />
+    </node>
+    
+    <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins_estimator)/../config/vins_rviz_config.rviz" />
+    
+    
+</launch>
