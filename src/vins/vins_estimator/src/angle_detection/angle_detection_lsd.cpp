@@ -1,4 +1,4 @@
-#include </home/caoxudong/catkin_ws/src/VINS-Mono/vins_estimator/src/angle_detection/angle_detection.h>
+#include </home/caoxudong/catkin_ws/src/vins/vins_estimator/src/angle_detection/angle_detection.h>
 
 using namespace std;
 using namespace cv;

@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<Workspace>
+    <Distribution name="kinetic"/>
+    <DefaultBuildSystem value="0"/>
+    <WatchDirectories>
+        <Directory>src</Directory>
+    </WatchDirectories>
+    <Directory>/opt/ros/kinetic/include</Directory>
+</Workspace>
