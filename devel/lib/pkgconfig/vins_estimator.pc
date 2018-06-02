@@ -1,8 +1,0 @@
-prefix=/home/caoxudong/catkin_ws/devel
-
-Name: vins_estimator
-Description: Description of vins_estimator
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/caoxudong/catkin_ws/devel/lib 
-Requires: 
