@@ -583,7 +583,8 @@ bool Estimator::visualInitialAlign()
 bool Estimator::relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l)
 {
   // find previous frame which contians enough correspondance and parallex with newest frame
-  //！在滑窗内寻找与最新的关键帧共视点超过20(像素点)的关键帧    for (int i = 0; i < WINDOW_SIZE; i++)
+  //！在滑窗内寻找与最新的关键帧共视点超过20(像素点)的关键帧
+  for (int i = 0; i < WINDOW_SIZE; i++)
     {
         vector<pair<Vector3d, Vector3d>> corres;
         corres = f_manager.getCorresponding(i, WINDOW_SIZE);
