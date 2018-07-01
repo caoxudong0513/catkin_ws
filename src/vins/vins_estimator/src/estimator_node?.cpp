@@ -17,17 +17,22 @@
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
+#include <std_msgs/Bool.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
+#include "angle_detection/angle_detection.h" //add by hao
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 Estimator estimator;
 
 std::condition_variable con;
 double current_time = -1;
-//! 先进先出
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 std::mutex m_posegraph_buf;
 queue<int> optimize_posegraph_buf;
-//! 关键帧队列
 queue<KeyFrame*> keyframe_buf;
 queue<RetriveData> retrive_data_buf;
 
@@ -62,13 +67,8 @@ vector<int> erase_index;
 std_msgs::Header cur_header;
 Eigen::Vector3d relocalize_t{Eigen::Vector3d(0, 0, 0)};
 Eigen::Matrix3d relocalize_r{Eigen::Matrix3d::Identity()};
+ros::Publisher pub_liusiqi;
 
-/**
- * [predict 对单次的IMU测量值做积分得到位移和姿态
- * question：这个地方是为了增加系统位姿的输出频率？
- * ]
- * @param imu_msg [采样时间内单次IMU测量值]
- */
 void predict(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
@@ -85,7 +85,6 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     double rz = imu_msg->angular_velocity.z;
     Eigen::Vector3d angular_velocity{rx, ry, rz};
 
-    //! 这个地方的tmp_Q是local-->world
     Eigen::Vector3d un_acc_0 = tmp_Q * (acc_0 - tmp_Ba - tmp_Q.inverse() * estimator.g);
 
     Eigen::Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - tmp_Bg;
@@ -120,27 +119,16 @@ void update()
 
 }
 
-/**
- * 获取Feature和IMU的测量值，这里做了简单的一个对齐
- */
-std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> getMeasurements()
+std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
+getMeasurements()
 {
     std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
 
-    //! 只有以下情况符合添加measurements的要求
-    /*
-    /*     [-----IMU-----]
-    /*     |add |
-    /*     |add[|--Ftature--]
-    /*  只有标记了add的IMU数据和Feature_buf中的最后一个Feature才会被加入到measurements中
-    */
-    //! imu_buf的数据在imu_callback()中已经加入
     while (true)
     {
         if (imu_buf.empty() || feature_buf.empty())
             return measurements;
 
-        //! 如果最新的IMU的数据时间戳小于最旧特征点的时间戳，则等待IMU刷新
         if (!(imu_buf.back()->header.stamp > feature_buf.front()->header.stamp))
         {
             ROS_WARN("wait for imu, only should happen at the beginning");
@@ -148,7 +136,6 @@ std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointC
             return measurements;
         }
 
-        //! 如果最旧的IMU数据的时间戳大于最旧特征时间戳，则弹出旧图像
         if (!(imu_buf.front()->header.stamp < feature_buf.front()->header.stamp))
         {
             ROS_WARN("throw img, only should happen at the beginning");
@@ -158,8 +145,6 @@ std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointC
         sensor_msgs::PointCloudConstPtr img_msg = feature_buf.front();
         feature_buf.pop();
 
-        //! 这里IMU和Feature做了简单的对齐，确保IMU的时间戳是小于图像的
-        //! 在IMU buff中的时间戳小于特征点的都和该帧特征联合存入
         std::vector<sensor_msgs::ImuConstPtr> IMUs;
         while (imu_buf.front()->header.stamp <= img_msg->header.stamp)
         {
@@ -172,23 +157,15 @@ std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointC
     return measurements;
 }
 
-/**
- * [imu_callback IMU测量的回调函数]
- * @param imu_msg [接受到的IMU消息]
- */
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     m_buf.lock();
     imu_buf.push(imu_msg);
     m_buf.unlock();
-
-    //! 唤醒某个线程
     con.notify_one();
+
     {
         std::lock_guard<std::mutex> lg(m_state);
-
-        //! 这个地方积分是为了提高系统位姿的输出频率
-        //Prei-First
         predict(imu_msg);
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
@@ -197,14 +174,64 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     }
 }
 
-/**
- * [raw_image_callback 图像回调函数，只有进行闭环检测的时候才用到图像]
- * @param img_msg [回调的图像]
- */
+void MyGammaCorrection(cv::Mat& src,cv::Mat& dst, float fGamma)
+{
+    CV_Assert(src.data);
+    CV_Assert(src.depth() != sizeof(uchar));
+
+    unsigned char lut[256];
+    for( int i = 0; i < 256; i++ )
+    {
+        lut[i] = cv::saturate_cast<uchar>(pow((float)(i/255.0), fGamma) * 255.0f);
+    }
+
+    dst = src.clone();
+    const int channels = dst.channels();
+    switch(channels)
+    {
+        case 1:
+            {
+
+                cv::MatIterator_<uchar> it, end;
+                for( it = dst.begin<uchar>(), end = dst.end<uchar>(); it != end; it++ )
+                    //*it = pow((float)(((*it))/255.0), fGamma) * 255.0;
+                    *it = lut[(*it)];
+
+                break;
+            }
+//        case 3:
+//            {
+
+//                cv::MatIterator_<Vector3d> it, end;
+//                for( it =dst.begin<Vector3d>(), end = dst.end<Vector3d>(); it != end; it++ )
+//                {
+//                    //(*it)[0] = pow((float)(((*it)[0])/255.0), fGamma) * 255.0;
+//                    //(*it)[1] = pow((float)(((*it)[1])/255.0), fGamma) * 255.0;
+//                    //(*it)[2] = pow((float)(((*it)[2])/255.0), fGamma) * 255.0;
+
+//                    (*it)[0] = lut[((*it)[0])];
+//                    (*it)[1] = lut[((*it)[1])];
+//                    (*it)[2] = lut[((*it)[2])];
+//                }
+
+//                break;
+
+//            }
+    }
+}
+
 void raw_image_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
+
+
     cv_bridge::CvImagePtr img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     //image_pool[img_msg->header.stamp.toNSec()] = img_ptr->image;
+    std_msgs::Bool liusiqi;//cadd
+    if (estimator.wangtao)
+    {
+      liusiqi.data=true;
+      pub_liusiqi.publish(liusiqi);
+    }
     if(LOOP_CLOSURE)
     {
         i_buf.lock();
@@ -212,11 +239,6 @@ void raw_image_callback(const sensor_msgs::ImageConstPtr &img_msg)
         i_buf.unlock();
     }
 }
-
-/**
- * [feature_callback 关键点回调函数]
- * @param feature_msg [订阅的关键点]
- */
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     m_buf.lock();
@@ -225,10 +247,6 @@ void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
     con.notify_one();
 }
 
-/**
- * [send_imu 发送IMU数据到预积分环节]
- * @param imu_msg [IMU数据]
- */
 void send_imu(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
@@ -253,12 +271,8 @@ void send_imu(const sensor_msgs::ImuConstPtr &imu_msg)
 }
 
 //thread:loop detection
-/**
- * [process_loop_detection 闭环检测线程]
- */
 void process_loop_detection()
 {
-    //！Step1：闭环检测模型初始化
     if(loop_closure == NULL)
     {
         const char *voc_file = VOC_FILE.c_str();
@@ -273,7 +287,6 @@ void process_loop_detection()
     while(LOOP_CLOSURE)
     {
         KeyFrame* cur_kf = NULL; 
-
         m_keyframe_buf.lock();
         while(!keyframe_buf.empty())
         {
@@ -283,10 +296,8 @@ void process_loop_detection()
             keyframe_buf.pop();
         }
         m_keyframe_buf.unlock();
-
         if (cur_kf != NULL)
         {
-            //！Step2：将当前帧加入到关键帧序列中
             cur_kf->global_index = global_frame_cnt;
             m_keyframedatabase_resample.lock();
             keyframe_database.add(cur_kf);
@@ -299,26 +310,15 @@ void process_loop_detection()
             int old_index = -1;
             vector<cv::Point2f> cur_pts;
             vector<cv::Point2f> old_pts;
-
-            //！Step3：提取当前帧的Brief描述子(包括了另外500Fast角点的提取)
             TicToc t_brief;
             cur_kf->extractBrief(current_image);
             //printf("loop extract %d feature using %lf\n", cur_kf->keypoints.size(), t_brief.toc());
-            
-            //！Step4：启动最底层的闭环检测程序，检测当前帧是否能够形成闭环
             TicToc t_loopdetect;
-            /*
-                cur_pts，cur_pts：匹配的keypoints
-                old_index：闭环帧的id
-             */
-            loop_succ = loop_closure->startLoopClosure(cur_kf->keypoints, cur_kf->descriptors, cur_pts, cur_pts, old_index);
+            loop_succ = loop_closure->startLoopClosure(cur_kf->keypoints, cur_kf->descriptors, cur_pts, old_pts, old_index);
             double t_loop = t_loopdetect.toc();
             ROS_DEBUG("t_loopdetect %f ms", t_loop);
-
-            //！检测到闭环
             if(loop_succ)
             {
-                //！Step5：如果检测到闭环，则依据闭环帧的ID提取闭环帧
                 KeyFrame* old_kf = keyframe_database.getKeyframe(old_index);
                 if (old_kf == NULL)
                 {
@@ -328,7 +328,6 @@ void process_loop_detection()
                 ROS_DEBUG("loop succ %d with %drd image", global_frame_cnt, old_index);
                 assert(old_index!=-1);
                 
-                //！Step6：计算闭环帧和匹配帧之间的位姿关系和良好的匹配点
                 Vector3d T_w_i_old, PnP_T_old;
                 Matrix3d R_w_i_old, PnP_R_old;
 
@@ -340,17 +339,15 @@ void process_loop_detection()
                 cur_kf->findConnectionWithOldFrame(old_kf, measurements_old, measurements_old_norm, PnP_T_old, PnP_R_old, m_camera);
                 measurements_cur = cur_kf->measurements_matched;
                 features_id_matched = cur_kf->features_id_matched;
-                
-                // Step7：存入闭环的信息
+                // send loop info to VINS relocalization
                 int loop_fusion = 0;
                 if( (int)measurements_old_norm.size() > MIN_LOOP_NUM && global_frame_cnt - old_index > 35 && old_index > 30)
                 {
-                    //！将匹配帧的信息存入到retrive_data_buf中
+
                     Quaterniond PnP_Q_old(PnP_R_old);
                     RetriveData retrive_data;
                     retrive_data.cur_index = cur_kf->global_index;
                     retrive_data.header = cur_kf->header;
-                    //！存入闭环帧的信息
                     retrive_data.P_old = T_w_i_old;
                     retrive_data.R_old = R_w_i_old;
                     retrive_data.relative_pose = false;
@@ -367,7 +364,6 @@ void process_loop_detection()
                     m_retrive_data_buf.lock();
                     retrive_data_buf.push(retrive_data);
                     m_retrive_data_buf.unlock();
-                    //！加入当前帧的闭环帧信息
                     cur_kf->detectLoop(old_index);
                     old_kf->is_looped = 1;
                     loop_fusion = 1;
@@ -443,7 +439,6 @@ void process_loop_detection()
             cur_kf->image.release();
             global_frame_cnt++;
 
-            //！闭环检测的时间过长
             if (t_loop > 1000 || keyframe_database.size() > MAX_KEYFRAME_NUM)
             {
                 m_keyframedatabase_resample.lock();
@@ -505,39 +500,26 @@ void process()
 {
     while (true)
     {
-        //! Step1: 获取Features和IMU测量数据
-        //! 
-        //! 单帧图像对应多帧IMU数据的结构
-        std::vector<std::pair< std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr> > measurements;
+        std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
         std::unique_lock<std::mutex> lk(m_buf);
         con.wait(lk, [&]
                  {
-                    return (measurements = getMeasurements()).size() != 0;
+            return (measurements = getMeasurements()).size() != 0;
                  });
         lk.unlock();
 
         for (auto &measurement : measurements)
         {
-            //! Step2: 对读取到的IMU进行预积分
             for (auto &imu_msg : measurement.first)
                 send_imu(imu_msg);
 
-            //! img_msg = sensor_msgs::PointCloud
-            /*
-             *      sensor_msgs/PointCloud:
-             *          std_msgs/Header header
-             *          geometry_msgs/Point32[] points
-             *          sensor_msgs/ChannelFloat32[] channels
-             */
             auto img_msg = measurement.second;
             ROS_DEBUG("processing vision data with stamp %f \n", img_msg->header.stamp.toSec());
 
             TicToc t_s;
-            //! 这里存的是归一化平面上的点
             map<int, vector<pair<int, Vector3d>>> image;
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
-                //! 归一化平面上的点
                 int v = img_msg->channels[0].values[i] + 0.5;
                 int feature_id = v / NUM_OF_CAM;
                 int camera_id = v % NUM_OF_CAM;
@@ -547,8 +529,71 @@ void process()
                 ROS_ASSERT(z == 1);
                 image[feature_id].emplace_back(camera_id, Vector3d(x, y, z));
             }
+            /*angle_detection. add by hao*/
+            cout<<"angle detect!"<<endl;
+            cv::Mat im;
+            auto tmp_image_buf=image_buf;
+            i_buf.lock();
+            while(!tmp_image_buf.empty() && tmp_image_buf.front().second < img_msg->header.stamp.toSec())
+            {
+                tmp_image_buf.pop();
+            }
+            i_buf.unlock();
+            im=tmp_image_buf.front().first;
+
+            double heading=angle_detection(im);
+            cout<<"angle "<<endl;
+            double angle_prvl=0;
+            double euler_estimator_prv=0;
+            cout<<"Heading is : "<<heading<<endl;
+          // cout<< "jiaodu" << estimator.Rs[WINDOW_SIZE] <<endl;
+            if (!__isnan(heading))
+             {
+             Eigen::Vector3d euler_raw(heading,0,0);
+             Eigen::Vector3d euler_estimator = estimator.Rs[WINDOW_SIZE].eulerAngles(2,1,0);
+             double delta_raw =heading-angle_prvl;
+             double delta_estimator = euler_estimator[0] - euler_estimator_prv;
+             double delta_sum = delta_raw +delta_estimator;
+             if  (delta_sum > 45)
+                {
+                  delta_sum = delta_sum -90;
+                 }
+             else
+                 if(delta_sum <= -45)
+                    {
+                   delta_sum = delta_sum + 90;
+                    }
+              double angel_corrt = heading + delta_sum;
+             cout << "heading" << heading <<endl;
+//             cout << "delta_raw" << delta_raw <<endl;
+            cout << "delta_estimator" << delta_estimator <<endl;
+//             cout << "delta_sum" << delta_sum <<endl;
+//             cout << "angel_corrt" << angel_corrt <<endl;
+//             cout << "euler_estimator[0]" << euler_estimator[0] <<endl;
+             Eigen::Vector3d euler_correct(angel_corrt,euler_estimator[1],euler_estimator[2]);
+             Eigen::AngleAxisd rollAngle(euler_correct[0], Eigen::Vector3d::UnitZ());
+             Eigen::AngleAxisd yawAngle(euler_correct[1], Eigen::Vector3d::UnitY());
+             Eigen::AngleAxisd pitchAngle(euler_correct[2], Eigen::Vector3d::UnitX());
+             Eigen::Quaternion<double> q = rollAngle * yawAngle * pitchAngle;
+             Eigen::Matrix3d estimator_corrects = q.matrix();
+//             Eigen::Matrix3d estimator_corrects = Eigen::AngleAxisd(euler_correct[0],Eigen::Vector3d::UnitZ())
+//                                                *Eigen::AngleAxisd(euler_correct[1],Eigen::Vector3d::UnitY())
+//                                               *Eigen::AngleAxisd(euler_correct[2],Eigen::Vector3d::UnitX());
+            // cout << "estimator.Rs[WINDOW_SIZE]" << estimator.Rs[WINDOW_SIZE] <<endl;
+            // cout << "estimator_corrects" << estimator_corrects<<endl;
+             angle_prvl = heading;
+             euler_estimator_prv=euler_estimator[0];
+             Eigen::Matrix3d tiaoshi =estimator.Rs[WINDOW_SIZE];//
+
+             estimator.Rs[WINDOW_SIZE] = estimator_corrects;
+             Eigen::Matrix3d chazhi =tiaoshi-estimator.Rs[WINDOW_SIZE];//
+             ///cout << "chazhi" << chazhi<< endl;//
+            }
+
             estimator.processImage(image, img_msg->header);
-            
+
+
+
             /**
             *** start build keyframe database for loop closure
             **/
@@ -565,9 +610,6 @@ void process()
                     else
                         it++;
                 }
-
-                //! retrive_data_buf --> retrive_data_vector
-                //! 向闭环数据库中加入闭环信息
                 m_retrive_data_buf.lock();
                 while(!retrive_data_buf.empty())
                 {
@@ -575,7 +617,6 @@ void process()
                     retrive_data_buf.pop();
                     estimator.retrive_data_vector.push_back(tmp_retrive_data);
                 }
-
                 m_retrive_data_buf.unlock();
                 //WINDOW_SIZE - 2 is key frame
                 if(estimator.marginalization_flag == 0 && estimator.solver_flag == estimator.NON_LINEAR)
@@ -593,15 +634,11 @@ void process()
                     cv::Mat KeyFrame_image;
                     KeyFrame_image = image_buf.front().first;
                     
-                    //！向Keyframe Database中添加关键帧
                     const char *pattern_file = PATTERN_FILE.c_str();
-                    //！经过闭环校正之后
                     Vector3d cur_T;
                     Matrix3d cur_R;
                     cur_T = relocalize_r * vio_T_w_i + relocalize_t;
                     cur_R = relocalize_r * vio_R_w_i;
-
-                    //! 构造新的关键帧，
                     KeyFrame* keyframe = new KeyFrame(estimator.Headers[WINDOW_SIZE - 2].stamp.toSec(), vio_T_w_i, vio_R_w_i, cur_T, cur_R, image_buf.front().first, pattern_file);
                     keyframe->setExtrinsic(estimator.tic[0], estimator.ric[0]);
                     keyframe->buildKeyFrameFeatures(estimator, m_camera);
@@ -613,7 +650,6 @@ void process()
                     {
                         if(estimator.Headers[0].stamp.toSec() == estimator.retrive_data_vector[0].header)
                         {
-                            //！如果闭环帧和匹配帧之间相差太大，则移除该闭环
                             KeyFrame* cur_kf = keyframe_database.getKeyframe(estimator.retrive_data_vector[0].cur_index);                            
                             if (abs(estimator.retrive_data_vector[0].relative_yaw) > 30.0 || estimator.retrive_data_vector[0].relative_t.norm() > 20.0)
                             {
@@ -678,8 +714,9 @@ int main(int argc, char **argv)
     ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_raw_image = n.subscribe(IMAGE_TOPIC, 2000, raw_image_callback);
-
+    pub_liusiqi=n.advertise<std_msgs::Bool>("/vins_estimator/liusiqi",1000);
     std::thread measurement_process{process};
+
     std::thread loop_detection, pose_graph;
     if (LOOP_CLOSURE)
     {

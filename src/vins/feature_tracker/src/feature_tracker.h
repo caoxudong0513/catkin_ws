@@ -49,10 +49,10 @@ class FeatureTracker
     cv::Mat mask;
     cv::Mat fisheye_mask;
     cv::Mat prev_img, cur_img, forw_img;//11.6cadd LK跟踪前后两帧，forw当前帧，cur上一帧，prev上一次发布的帧
-    vector<cv::Point2f> n_pts;
-    vector<cv::Point2f> prev_pts, cur_pts, forw_pts;
+    vector<cv::Point2f> n_pts;//! 除了KLT得到的Freatures之外，新提取的Features以满足最大特征点数目要求
+    vector<cv::Point2f> prev_pts, cur_pts, forw_pts;//! 和图像image同理,cur_pts：上一帧特征点，forw_pts是当前帧特征点
     vector<int> ids;
-    vector<int> track_cnt;
+    vector<int> track_cnt; //代表当前cur_ptrs被追踪的时间次数
     camodocal::CameraPtr m_camera;
 
     static int n_id;

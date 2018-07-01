@@ -21,6 +21,7 @@
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 
+//！检索关键帧的数据结构
 struct RetriveData//检索数据
 {
     /* data */
@@ -83,9 +84,11 @@ class Estimator
     MatrixXd Ap[2], backup_A;
     VectorXd bp[2], backup_b;
 
+    //！camera-->IMU
     Matrix3d ric[NUM_OF_CAM];
     Vector3d tic[NUM_OF_CAM];
 
+    //! local-->world  (IMU系下)
     Vector3d Ps[(WINDOW_SIZE + 1)];
     Vector3d Vs[(WINDOW_SIZE + 1)];
     Matrix3d Rs[(WINDOW_SIZE + 1)];
@@ -94,6 +97,7 @@ class Estimator
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
+    //! 滑窗内11个帧的帧头
     std_msgs::Header Headers[(WINDOW_SIZE + 1)];
 
     IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
@@ -103,6 +107,7 @@ class Estimator
     vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
     vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
 
+    //! 滑窗内关键帧的个数
     int frame_count;
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
 
@@ -120,6 +125,7 @@ class Estimator
     double initial_timestamp;
 
 
+    //！stl vector形式的RS[i]转为数组形式
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
@@ -134,9 +140,30 @@ class Estimator
     Matrix3d relocalize_r;
 
     MarginalizationInfo *last_marginalization_info;
-    vector<double *> last_marginalization_parameter_blocks;
+    vector<double *> last_marginalization_parameter_blocks;//! 边缘化的参数快
 
+     //! <时间戳，单张图像归一化特征点集合以及当前时刻IMU预计分信息>
     map<double, ImageFrame> all_image_frame;
     IntegrationBase *tmp_pre_integration;
 
 };
+/**
+ **********声明***********
+ *  闭环帧：在Keyframe database中旧帧，匹配帧：在当前滑窗内的匹配帧
+ *
+ *  LOOP_CLOSURE: 是否进行闭环检测
+ *
+ *  retrive_data_vector:在processImage之后开始往Dtabase中添加数据
+ *
+ *  image：某一帧图像得到的特征点，<Feature_id, <camera_id,Feature>>
+ *
+ *  Headers: 滑窗内，每一帧Keyframe对应的帧头
+ *
+ *  f_manager: 滑窗的特征管理器
+ *
+ *  keyframe_database：关键帧集合，每次在闭环检测线程中增加新元素，每个关键帧在滑窗内的导数第二个位置时被添加。
+ *
+ *  keyframe_buf：为闭环检测提供临时的Keyframe存储,中间只包含滑窗内的导数第二Keyframe，当其包含的某帧进入闭环检测环节会被弹出
+ *
+ *
+ */

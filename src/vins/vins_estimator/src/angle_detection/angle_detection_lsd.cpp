@@ -56,7 +56,7 @@ ls->drawSegments(input, lines_std);
             //  CvPoint* line = ( CvPoint* )cvGetSeqElem( lines, i );  //lines序列里面存储的是像素点坐标
             if(dist_p2l(lines_std[i], corep)>=100)//判断是否经过图像中心
                 //            //cvSeqRemove(lines_std,i);
-                    cout << "num     " << lines_std.size() << endl;
+                    //cout << "num     " << lines_std.size() << endl;6.11
                 //          else
             {
 
@@ -140,7 +140,7 @@ ls->drawSegments(input, lines_std);
         //    cout<<"first_length :"<<r_first<<", second_length :"<<r_second<<endl;
 
         cout << "  heading   " << heading << endl;
-        imshow("Standard refinement",input);
+        //imshow("Standard refinement",input);6.11
         //imshow("last",img);
         waitKey(1);
 

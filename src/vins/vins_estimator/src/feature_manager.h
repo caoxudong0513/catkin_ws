@@ -15,6 +15,7 @@ using namespace Eigen;
 
 #include "parameters.h"
 
+//! Feature在某个图像帧下的坐标（归一化平面坐标）
 class FeaturePerFrame
 {
   public:
@@ -32,11 +33,13 @@ class FeaturePerFrame
     double dep_gradient;
 };
 
+//！单个特征点
 class FeaturePerId
 {
   public:
     const int feature_id;
     int start_frame;
+    //！该特征点被关键帧观测到的特征点坐标集合
     vector<FeaturePerFrame> feature_per_frame;
 
     int used_num;
@@ -47,6 +50,7 @@ class FeaturePerId
 
     Vector3d gt_p;
 
+    //! _feature_id: feature的ID，_start_frame：所属的关键帧ID
     FeaturePerId(int _feature_id, int _start_frame)
         : feature_id(_feature_id), start_frame(_start_frame),
           used_num(0), estimated_depth(-1.0), solve_flag(0)
@@ -81,6 +85,7 @@ class FeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier();
+    //！滑窗内所有特征点列表
     list<FeaturePerId> feature;
     int last_track_num;
 
