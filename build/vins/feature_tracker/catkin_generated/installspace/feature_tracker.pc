@@ -1,8 +1,0 @@
-prefix=/home/caoxudong/catkin_ws/install
-
-Name: feature_tracker
-Description: Description of feature_tracker
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/caoxudong/catkin_ws/install/lib 
-Requires: 

@@ -1,2 +1,0 @@
-vins/benchmark_publisher:vins/camera_model:vins/feature_tracker:vins/vins_estimator
--G CodeBlocks - Unix Makefiles -DCMAKE_BUILD_TYPE=Debug -DCATKIN_DEVEL_PREFIX=/home/caoxudong/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/caoxudong/catkin_ws/install
