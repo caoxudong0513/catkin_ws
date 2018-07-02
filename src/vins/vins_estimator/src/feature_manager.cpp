@@ -44,6 +44,7 @@ int FeatureManager::getFeatureCount()
 
 
 /**
+ * @brief 把图像特征点放入名为feature的list容器中，然后计算当前的视差
  * [FeatureManager::addFeatureCheckParallax description]
  * @param  frame_count [滑窗内关键帧ID]
  * @param  image       [<Feature_id, <camera_id,Feature>>]
@@ -59,6 +60,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     int parallax_num = 0;
     last_track_num = 0;
     //! 迭代单个特征点
+    //每个feature有可能出现多个帧中，share same id，放入feature容器中
     for (auto &id_pts : image)
     {
       //! 特征点的归一化坐标
@@ -90,6 +92,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     if (frame_count < 2 || last_track_num < 20)
         return true;
 
+    //计算视差，second last和third last
     //! 计算共视关系， parallax_num为满足要求的Feature的个数
     for (auto &it_per_id : feature)
     {

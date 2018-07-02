@@ -31,7 +31,7 @@ queue<int> optimize_posegraph_buf;
 queue<KeyFrame*> keyframe_buf;
 queue<RetriveData> retrive_data_buf;
 
-int sum_of_wait = 0;
+int sum_of_wait = 0;//这个变量没有使用
 
 std::mutex m_buf;
 std::mutex m_state;
@@ -120,7 +120,10 @@ void update()
 
 }
 
+
+
 /**
+ * @brief 对其imu和图像数据进行初步对齐，使得一副图像对应多组imu数据，并确保相邻图像对应时间戳内的所有IMU数据
  * 获取Feature和IMU的测量值，这里做了简单的一个对齐
  */
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> getMeasurements()
@@ -161,6 +164,7 @@ std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointC
         //! 这里IMU和Feature做了简单的对齐，确保IMU的时间戳是小于图像的
         //! 在IMU buff中的时间戳小于特征点的都和该帧特征联合存入
         std::vector<sensor_msgs::ImuConstPtr> IMUs;
+        //图像数据(img_msg)，对应多组在时间戳内的imu数据,然后塞入measurements
         while (imu_buf.front()->header.stamp <= img_msg->header.stamp)
         {
             IMUs.emplace_back(imu_buf.front());
@@ -519,9 +523,11 @@ void process()
         for (auto &measurement : measurements)
         {
             //! Step2: 对读取到的IMU进行预积分
+            //! //分别取出各段imu数据，进行预积分
             for (auto &imu_msg : measurement.first)
                 send_imu(imu_msg);
 
+            //对应这段的vision data
             //! img_msg = sensor_msgs::PointCloud
             /*
              *      sensor_msgs/PointCloud:

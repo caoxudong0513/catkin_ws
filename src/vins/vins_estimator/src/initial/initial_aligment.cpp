@@ -1,5 +1,6 @@
 #include "initial_alignment.h"
 
+//根据视觉SFM的结果来标定陀螺仪的Bias，注意得到了新的Bias后对应的预积分需要repropagate
 void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
 {
     Matrix3d A;
@@ -37,6 +38,9 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
 }
 
 
+//Algorithm 1 to find b1 b2
+//在半径为G的半球找到切面的一对正交基
+//求法跟论文不太一致，但是没影响
 MatrixXd TangentBasis(Vector3d &g0)
 {
     Vector3d b, c;
@@ -52,6 +56,9 @@ MatrixXd TangentBasis(Vector3d &g0)
     return bc;
 }
 
+//see V-B-3 in Paper
+//1.按照论文思路，重力向量是由重力大小所约束的，论文中使用半球加上半球切面来参数化重力
+//2.然后迭代求得w1,w2
 void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     Vector3d g0 = g.normalized() * G.norm();
@@ -122,6 +129,9 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
     g = g0;
 }
 
+//初始化滑动窗口中每帧的 速度V[0:n] Gravity Vectorg,尺度s -> 对应论文的V-B-2
+//重力修正RefineGravity -> 对应论文的V-B-3
+//重力方向跟世界坐标的Z轴对齐
 bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     int all_frame_count = all_image_frame.size();
@@ -198,8 +208,10 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
 
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
 {
+  //估测陀螺仪的Bias，对应论文V-B-1
     solveGyroscopeBias(all_image_frame, Bgs);
 
+    //求解V 重力向量g和 尺度s
     if(LinearAlignment(all_image_frame, g, x))
         return true;
     else 
