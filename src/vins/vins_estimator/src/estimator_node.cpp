@@ -85,19 +85,33 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     double rz = imu_msg->angular_velocity.z;
     Eigen::Vector3d angular_velocity{rx, ry, rz};
 
+    //*****get last at
+    //am=R(at+g)+ba+na
+    //at=q(am-ba-q.inverse*g)得到真实加速度值（imubody坐标系下）
     //! 这个地方的tmp_Q是local-->world
     Eigen::Vector3d un_acc_0 = tmp_Q * (acc_0 - tmp_Ba - tmp_Q.inverse() * estimator.g);
 
+    //*****get required  wt(wt')
+    //wm=wt+bw+nw
+    //wt'=0.5(wk+w[k+1])-bw（imubody坐标系下）last wm,wm now取平均
     Eigen::Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - tmp_Bg;
+
+    //*****updata q
+    //q=q*q{wt*dt}
     tmp_Q = tmp_Q * Utility::deltaQ(un_gyr * dt);
 
+    //*****get at now
     Eigen::Vector3d un_acc_1 = tmp_Q * (linear_acceleration - tmp_Ba - tmp_Q.inverse() * estimator.g);
 
+    //*****get required  at(at')
+    //at'=0.5(atk+atk+1)
     Eigen::Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
 
+    //*****get pnow=last p+ v*dt+ 0.5at'(dt*dt)
     tmp_P = tmp_P + dt * tmp_V + 0.5 * dt * dt * un_acc;
     tmp_V = tmp_V + dt * un_acc;
 
+    //当前时刻的w，a赋值为last w，last a
     acc_0 = linear_acceleration;
     gyr_0 = angular_velocity;
 }
@@ -207,7 +221,22 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
  */
 void raw_image_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    cv_bridge::CvImagePtr img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+    //cv_bridge::CvImagePtr img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+    cv_bridge::CvImageConstPtr img_ptr;
+        if (img_msg->encoding == "8UC1")
+        {
+            sensor_msgs::Image img;
+            img.header = img_msg->header;
+            img.height = img_msg->height;
+            img.width = img_msg->width;
+            img.is_bigendian = img_msg->is_bigendian;
+            img.step = img_msg->step;
+            img.data = img_msg->data;
+            img.encoding = "mono8";
+            img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+        }
+        else
+            img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     //image_pool[img_msg->header.stamp.toNSec()] = img_ptr->image;
     if(LOOP_CLOSURE)
     {
