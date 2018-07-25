@@ -212,6 +212,8 @@ void FeatureTracker::readImage(const cv::Mat &_img)
             //上面通过光流法找到一些对应点，这里是为了确保每个帧有足够点，然后调用addPoint添加点
 //在mask中不为0的区域,调用goodFeaturesToTrack提取新的角点n_pts, 通过addPoints()push到forw_pts中, id初始化-1, track_cnt初始化为1
 //完了以后,在外面主回调函数中调用updateID()来更新那些新特征点的ID
+            //保证每个image有足够的特征点，不够就新提取
+
             cv::goodFeaturesToTrack(forw_img, n_pts, MAX_CNT - forw_pts.size(), 0.1, MIN_DIST, mask);
         }
         else

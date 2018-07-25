@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 4.4.1, 2018-07-07T20:32:07. -->
+<!-- Written by QtCreator 4.4.1, 2018-07-25T16:53:06. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -361,24 +361,24 @@
      <valuemap type="QVariantMap" key="ProjectExplorer.RunStepList.Step.0">
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName"></value>
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
-      <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">ROSProjectManager.ROSRunStep</value>
-      <value type="bool" key="ProjectExplorer.RunStep.Enabled">true</value>
-      <value type="QString" key="ROSProjectManager.ROSGenericStep.Arguments"></value>
-      <value type="QString" key="ROSProjectManager.ROSGenericStep.Command">rosrun</value>
-      <value type="bool" key="ROSProjectManager.ROSGenericStep.DebugContinueOnAttach">true</value>
-      <value type="QString" key="ROSProjectManager.ROSGenericStep.Package"></value>
-      <value type="QString" key="ROSProjectManager.ROSGenericStep.Target"></value>
-      <value type="QString" key="ROSProjectManager.ROSGenericStep.TargetPath"></value>
-     </valuemap>
-     <valuemap type="QVariantMap" key="ProjectExplorer.RunStepList.Step.1">
-      <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName"></value>
-      <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
       <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">ROSProjectManager.ROSLaunchStep</value>
       <value type="bool" key="ProjectExplorer.RunStep.Enabled">true</value>
       <value type="QString" key="ROSProjectManager.ROSGenericStep.Arguments"></value>
       <value type="QString" key="ROSProjectManager.ROSGenericStep.Command">roslaunch</value>
       <value type="bool" key="ROSProjectManager.ROSGenericStep.DebugContinueOnAttach">false</value>
       <value type="QString" key="ROSProjectManager.ROSGenericStep.Package">vins_estimator</value>
+      <value type="QString" key="ROSProjectManager.ROSGenericStep.Target">intel.launch</value>
+      <value type="QString" key="ROSProjectManager.ROSGenericStep.TargetPath">/home/caoxudong/catkin_ws/src/vins/vins_estimator/launch/intel.launch</value>
+     </valuemap>
+     <valuemap type="QVariantMap" key="ProjectExplorer.RunStepList.Step.1">
+      <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName"></value>
+      <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
+      <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">ROSProjectManager.ROSRunStep</value>
+      <value type="bool" key="ProjectExplorer.RunStep.Enabled">true</value>
+      <value type="QString" key="ROSProjectManager.ROSGenericStep.Arguments"></value>
+      <value type="QString" key="ROSProjectManager.ROSGenericStep.Command">rosrun</value>
+      <value type="bool" key="ROSProjectManager.ROSGenericStep.DebugContinueOnAttach">false</value>
+      <value type="QString" key="ROSProjectManager.ROSGenericStep.Package">feature_tracker</value>
       <value type="QString" key="ROSProjectManager.ROSGenericStep.Target"></value>
       <value type="QString" key="ROSProjectManager.ROSGenericStep.TargetPath"></value>
      </valuemap>

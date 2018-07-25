@@ -106,11 +106,13 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     //*****get required  at(at')
     //at'=0.5(atk+atk+1)
     Eigen::Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
-
+    cout << "tmp_P" <<tmp_P << endl;
+    cout << "tmp_V" <<tmp_V << endl;
     //*****get pnow=last p+ v*dt+ 0.5at'(dt*dt)
     tmp_P = tmp_P + dt * tmp_V + 0.5 * dt * dt * un_acc;
     tmp_V = tmp_V + dt * un_acc;
-
+    cout << "tmp_P" <<tmp_P << endl;
+    cout << "tmp_V" <<tmp_V << endl;
     //当前时刻的w，a赋值为last w，last a
     acc_0 = linear_acceleration;
     gyr_0 = angular_velocity;
@@ -249,6 +251,7 @@ void raw_image_callback(const sensor_msgs::ImageConstPtr &img_msg)
 /**
  * [feature_callback 关键点回调函数]
  * @param feature_msg [订阅的关键点]
+ * feature_msg（un_pts）放入feature_buf中
  */
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {

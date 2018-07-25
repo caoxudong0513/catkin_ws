@@ -38,13 +38,16 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         first_image_time = img_msg->header.stamp.toSec();
     }
 
+//    根据配置文件中的freq，确定每隔多久的时候，把检测到的特征点打包成/feature_tracker/featuretopic 发出去，
+//    要是没有达到发送的时间，这幅图像的feature就作为下一时刻的
+//    KLT追踪的特征点，就是不是每一副图像都要处理的，那样计算时间大了，而且数据感觉冗余，帧与帧之间图像的差距不会那么明显。
     // frequency control   频率控制，freq最小为10
     //! Step1：控制图像输入频率，这个地方是一个平均值
     if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
     {
         PUB_THIS_FRAME = true;//发布特征点
         // reset the frequency control  确定是否处理当前图片
-        //! question：频率过低的时候不应该做点其他事么？
+
         if (abs(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time) - FREQ) < 0.01 * FREQ)
         {
             first_image_time = img_msg->header.stamp.toSec();
@@ -56,8 +59,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
      //! Step2:读入图像，并进行KLT跟踪
     //cv_bridge::CvImageConstPtr ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);//cao20180705
     cv_bridge::CvImageConstPtr ptr;
-       if (img_msg->encoding == "8UC1")
-      {
+//       if (img_msg->encoding == "8UC1")
+//      {
             sensor_msgs::Image img;
             img.header = img_msg->header;
             img.height = img_msg->height;
@@ -67,9 +70,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             img.data = img_msg->data;
             img.encoding = "mono8";
             ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
-        }
-        else
-            ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+//        }
+//        else
+//            ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     cv::Mat show_img = ptr->image;
     TicToc t_r;
     for (int i = 0; i < NUM_OF_CAM; i++)  //读取图像
@@ -79,7 +82,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         if (i != 1 || !STEREO_TRACK)
 //11.6cadd  STEREO_TRACK置1，相机０和相机１是双目,相机０调用FeatureTracker进行跟踪，相机１通过LK光流跟踪相机０中的特征点，处理逻辑和前后帧跟踪逻辑一致，只是不再提取新的特征点。
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)));
-        //! 针对双目相机?
+        //! 针对双目相机
         else
         {
           //双目
@@ -146,7 +149,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         }
     }
 
-    //更新全局ID//! Step3:
+    //更新全局ID//! Step3://更新feature的ID
     for (unsigned int i = 0;; i++)   //更新ID
     {
         bool completed = false;
@@ -163,6 +166,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
    {
         pub_count++;
         sensor_msgs::PointCloudPtr feature_points(new sensor_msgs::PointCloud);
+        //特征点的id，图像的(u,v)坐标
         sensor_msgs::ChannelFloat32 id_of_point;
         sensor_msgs::ChannelFloat32 u_of_point;
         sensor_msgs::ChannelFloat32 v_of_point;
